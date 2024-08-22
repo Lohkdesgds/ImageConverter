@@ -1,0 +1,61 @@
+name: MSBuild
+
+on:
+  push:
+    branches:    
+      - v*
+
+env:
+  SOLUTION_FILE_PATH: .
+  BUILD_CONFIGURATION: Release
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@main
+      with:
+        submodules: 'true'
+
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Restore NuGet packages
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      run: nuget restore ${{env.SOLUTION_FILE_PATH}}
+
+    - name: Build
+      working-directory: ${{env.GITHUB_WORKSPACE}}
+      run: msbuild /m /p:OutDir=${{ runner.workspace }}\build_out\ /p:Configuration=${{env.BUILD_CONFIGURATION}} ${{env.SOLUTION_FILE_PATH}}
+
+    - name: Save build folder as artifact
+      uses: actions/upload-artifact@main
+      with:
+        name: release_windows
+        path: ${{ runner.workspace }}/build_out/${{ github.event.repository.name }}.exe
+
+  upload-release:
+    name: Publish release
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - name: Checkout
+      - uses: actions/checkout@main
+        with:
+          submodules: 'true'
+          
+      - name: "Download back file"
+        uses: actions/download-artifact@master
+        with:
+          name: release_windows
+          path: release_windows
+
+      - name: Release
+        uses: softprops/action-gh-release@master
+        with:
+          body_path: release_changelog.txt
+          tag_name: ${{ github.ref_name }}-ga
+          files: |
+            release_windows/${{ github.event.repository.name }}.exe
+          
+    
